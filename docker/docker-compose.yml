@@ -1,0 +1,13 @@
+services:
+  hastezig:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - hastezig-data:/data
+    restart: unless-stopped
+
+volumes:
+  hastezig-data:
