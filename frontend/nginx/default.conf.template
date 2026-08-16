@@ -1,0 +1,63 @@
+upstream hastezig_api {
+    server api:960;
+}
+
+server {
+    listen 961;
+    server_name _;
+
+    root /usr/share/nginx/html/main;
+    index index.html;
+
+    client_max_body_size 1m;
+    gzip on;
+    gzip_types text/css application/javascript text/javascript;
+
+    location /api/ {
+        proxy_pass http://hastezig_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
+    location /raw/ {
+        proxy_pass http://hastezig_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
+    location / {
+        sub_filter_once off;
+        sub_filter '{{LIGHT_ORIGIN}}' '${LIGHT_ORIGIN}';
+        sub_filter_types text/html;
+        try_files $uri /view.html;
+    }
+}
+
+server {
+    listen 962;
+    server_name _;
+
+    root /usr/share/nginx/html/light;
+    index light.html;
+
+    client_max_body_size 1m;
+
+    location /api/ {
+        proxy_pass http://hastezig_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
+    location /raw/ {
+        proxy_pass http://hastezig_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+
+    location / {
+        sub_filter_once off;
+        sub_filter '{{MAIN_ORIGIN}}' '${MAIN_ORIGIN}';
+        sub_filter_types text/html;
+        try_files $uri /light.html;
+    }
+}

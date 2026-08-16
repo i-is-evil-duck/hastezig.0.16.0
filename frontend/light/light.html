@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PasteBin - Light Mode</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #fff0f5;
+            color: #4a4a4a;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 900px;
+        }
+        h1 {
+            color: #ff69b4;
+            font-size: 2.5rem;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 10px rgba(255, 105, 180, 0.2);
+        }
+        .subtitle {
+            color: #b08090;
+            margin-bottom: 30px;
+            font-size: 0.95rem;
+        }
+        .theme-switch {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+        .theme-switch a {
+            color: #ff69b4;
+            text-decoration: none;
+            padding: 8px 16px;
+            border: 2px solid #ff69b4;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            font-size: 0.85rem;
+            background: white;
+        }
+        .theme-switch a:hover {
+            background: #ff69b4;
+            color: white;
+        }
+        .editor-container {
+            background: #ffffff;
+            border: 2px solid #ffd1dc;
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(255, 105, 180, 0.15);
+        }
+        .editor-header {
+            background: #ffe4ec;
+            padding: 12px 16px;
+            border-bottom: 2px solid #ffd1dc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .dot.red { background: #ff8fa3; }
+        .dot.yellow { background: #ffd93d; }
+        .dot.green { background: #6bcb77; }
+        .editor-title {
+            margin-left: 10px;
+            color: #c08090;
+            font-size: 0.85rem;
+        }
+        textarea {
+            width: 100%;
+            min-height: 400px;
+            background: #ffffff;
+            color: #4a4a4a;
+            border: none;
+            padding: 20px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            resize: vertical;
+            outline: none;
+        }
+        textarea::placeholder {
+            color: #d0b0b8;
+        }
+        .btn {
+            background: #ff69b4;
+            color: white;
+            border: none;
+            padding: 14px 36px;
+            font-size: 1rem;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(255, 105, 180, 0.3);
+        }
+        .btn:hover {
+            background: #ff1493;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(255, 105, 180, 0.4);
+        }
+        .btn:active {
+            transform: translateY(0);
+        }
+        .result {
+            margin-top: 20px;
+            padding: 16px;
+            background: #ffffff;
+            border: 2px solid #ff69b4;
+            border-radius: 12px;
+            display: none;
+        }
+        .result.show {
+            display: block;
+        }
+        .result a {
+            color: #ff69b4;
+            word-break: break-all;
+        }
+        .result a:hover {
+            text-decoration: underline;
+        }
+        .error {
+            color: #ff4757;
+            margin-top: 10px;
+        }
+        .paste-view {
+            background: #ffffff;
+            border: 2px solid #ffd1dc;
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            overflow-x: auto;
+            display: none;
+        }
+        .paste-view.show {
+            display: block;
+        }
+        .nav-links {
+            margin-top: 30px;
+            text-align: center;
+        }
+        .nav-links a {
+            color: #b08090;
+            text-decoration: none;
+            margin: 0 15px;
+            font-size: 0.9rem;
+            transition: color 0.3s;
+        }
+        .nav-links a:hover {
+            color: #ff69b4;
+        }
+        .char-count {
+            text-align: right;
+            color: #c08090;
+            font-size: 0.8rem;
+            padding: 8px 16px;
+            background: #ffe4ec;
+            border-top: 2px solid #ffd1dc;
+        }
+    </style>
+</head>
+<body>
+    <div class="theme-switch">
+        <a href="{{MAIN_ORIGIN}}/">🌙 Dark Mode</a>
+    </div>
+    <div class="container">
+        <h1>📝 PasteBin</h1>
+        <p class="subtitle">Share code and text snippets instantly</p>
+
+        <div class="editor-container">
+            <div class="editor-header">
+                <div class="dot red"></div>
+                <div class="dot yellow"></div>
+                <div class="dot green"></div>
+                <span class="editor-title">new_paste.txt</span>
+            </div>
+            <textarea id="pasteContent" placeholder="Paste your code or text here..."></textarea>
+            <div class="char-count" id="charCount">0 characters</div>
+        </div>
+
+        <button class="btn" onclick="submitPaste()">Create Paste</button>
+
+        <div class="result" id="result"></div>
+        <div class="paste-view" id="pasteView"></div>
+
+        <div class="nav-links">
+            <a href="/">New Paste</a>
+            <a href="#" onclick="viewRaw()">View Raw</a>
+        </div>
+    </div>
+
+    <script>
+        const textarea = document.getElementById('pasteContent');
+        const charCount = document.getElementById('charCount');
+
+        textarea.addEventListener('input', () => {
+            charCount.textContent = textarea.value.length + ' characters';
+        });
+
+        async function submitPaste() {
+            const content = textarea.value;
+            if (!content.trim()) {
+                showResult('Please enter some content first!', true);
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/paste', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                        blobs: [{ content: content, lang: 'plaintext' }]
+                    })
+                });
+
+                const data = await response.json().catch(() => null);
+                if (response.ok && data && data.id) {
+                    const url = window.location.origin + '/p/' + data.id;
+                    showResult('Paste created! <a href="' + url + '">' + url + '</a>');
+                    textarea.value = '';
+                    charCount.textContent = '0 characters';
+                } else {
+                    showResult((data && data.error) || 'Failed to create paste. Please try again.', true);
+                }
+            } catch (err) {
+                showResult('Network error. Please try again.', true);
+            }
+        }
+
+        function showResult(html, isError = false) {
+            const result = document.getElementById('result');
+            result.innerHTML = html;
+            result.className = 'result show' + (isError ? ' error' : '');
+        }
+
+        function viewRaw() {
+            const path = window.location.pathname;
+            if (path.startsWith('/p/')) {
+                window.location.href = '/raw/' + path.slice(3);
+            } else {
+                showResult('No paste selected. Create or visit a paste first.', true);
+            }
+        }
+
+        // Check if we're viewing a paste
+        const path = window.location.pathname;
+        if (path.startsWith('/p/')) {
+            const id = path.slice(3);
+            fetch('/raw/' + id)
+                .then(r => r.text())
+                .then(text => {
+                    textarea.value = text;
+                    charCount.textContent = text.length + ' characters';
+                    document.querySelector('.editor-title').textContent = id + '.txt';
+                })
+                .catch(() => {
+                    showResult('Paste not found.', true);
+                });
+        }
+    </script>
+</body>
+</html>

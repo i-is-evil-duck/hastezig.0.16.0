@@ -3,6 +3,9 @@
 A tiny pastebin written in Zig. Client-side syntax highlighting, SQLite storage,
 no expiry, no accounts.
 
+Two containers: an API-only Zig backend and an nginx static frontend that ships
+two themes on separate ports.
+
 ## Features
 
 - 5-character alphanumeric paste IDs (base62, 916M combinations)
@@ -12,19 +15,31 @@ no expiry, no accounts.
 - Edit a paste and save it as a new paste
 - All syntax highlighting happens in the browser via highlight.js
 - SQLite storage (WAL mode), pastes never expire
-- Single static binary, runs in a scratch Docker image
+- API backend runs in a scratch Docker image, frontend served by nginx
 - Max paste size: 256 KB, max 20 blobs
 
-## Build
+## Ports
+
+| Port | Service     |
+|------|-------------|
+| 960  | API backend (hastezig) |
+| 961  | Frontend, dark theme   |
+| 962  | Frontend, light theme  |
+
+The light theme (port 962) and dark theme (port 961) link to each other via the
+`MAIN_ORIGIN` / `LIGHT_ORIGIN` env vars consumed by the nginx template
+(`frontend/nginx/default.conf.template`).
+
+## Build the backend
 
 Requires Zig 0.16.0.
 
 ```
 zig build -Doptimize=ReleaseSafe
-zig-out/bin/hastezig 0.0.0.0 8080 hastezig.db
+zig-out/bin/hastezig 0.0.0.0 960 hastezig.db
 ```
 
-Arguments: `host port db_path` (defaults: `0.0.0.0 8080 hastezig.db`).
+Arguments: `host port db_path` (defaults: `0.0.0.0 960 hastezig.db`).
 
 ## Run with Docker
 
@@ -32,14 +47,20 @@ Arguments: `host port db_path` (defaults: `0.0.0.0 8080 hastezig.db`).
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-Data is stored in the named volume `hastezig-data` (mounted at `/data`).
+- API: http://localhost:960
+- Dark theme: http://localhost:961
+- Light theme: http://localhost:962
+
+The frontend nginx proxies `/api/` and `/raw/` to the API container, so the
+browser talks to one origin per port. Data is stored in the named volume
+`hastezig-data` (mounted at `/data`).
 
 ## API
 
 Create a paste (multiple blobs, each with its own language):
 
 ```
-curl -X POST http://localhost:8080/api/paste \
+curl -X POST http://localhost:960/api/paste \
   -H "content-type: application/json" \
   -d '{"blobs":[{"content":"const x = 1;","lang":"javascript"},{"content":"import os","lang":"python"}]}'
 ```
@@ -52,7 +73,7 @@ Response: `{"id":"aBcDe","url":"/aBcDe"}`
 Get a paste as JSON:
 
 ```
-curl http://localhost:8080/api/paste/aBcDe
+curl http://localhost:960/api/paste/aBcDe
 ```
 
 Response: `{"id":"aBcDe","created_at":1785913610,"blobs":[{"lang":"javascript","content":"const x = 1;"}]}`
@@ -60,22 +81,16 @@ Response: `{"id":"aBcDe","created_at":1785913610,"blobs":[{"lang":"javascript","
 Get raw content:
 
 ```
-curl http://localhost:8080/raw/aBcDe
+curl http://localhost:960/raw/aBcDe
 ```
-
-## Pages
-
-- `/` – create a paste (add blobs, pick a language or auto-detect)
-- `/aBcDe` – view a paste with syntax highlighting and line numbers; "edit"
-  loads the paste into editable boxes, "save as new paste" creates a new one
-- `/static/...` – static assets (app.js, styles, vendor files)
 
 ## Layout
 
 - `src/main.zig` – entry point, args parsing
-- `src/server.zig` – HTTP server, routing, JSON handling
+- `src/server.zig` – HTTP API, routing, JSON handling, CORS
 - `src/db.zig` – SQLite wrapper
-- `src/web.zig` – embedded static assets
-- `src/web/` – frontend (HTML, CSS, JS) and vendored highlight.js files
 - `src/vendor/` – vendored SQLite amalgamation
-- `docker/` – Dockerfile and docker-compose.yml
+- `frontend/main/` – dark theme (index.html, view.html, app.js, style.css, vendor files)
+- `frontend/light/` – light theme (self-contained light.html)
+- `frontend/nginx/` – nginx config template (ports 961/962, `/api` + `/raw` proxy)
+- `docker/` – Dockerfile (API) and docker-compose.yml

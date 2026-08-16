@@ -71,6 +71,20 @@ header h1 a {
   margin-bottom: 0.75rem;
 }
 
+.theme-switch {
+  margin-left: auto;
+  color: var(--fg-dim);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.35rem 0.6rem;
+}
+
+.theme-switch:hover {
+  color: var(--blue);
+  border-color: var(--blue);
+}
+
 main {
   padding: 20px 50px;
 }
@@ -150,9 +164,10 @@ textarea.blob-content {
 }
 
 .linenos {
+  flex: 0 0 auto;
   margin: 0;
   padding: 0.9rem 0.75rem 0.9rem 0;
-  min-width: 3.5ch;
+  min-width: 4ch;
   text-align: right;
   color: var(--fg-faint);
   font-family: monospace;
@@ -163,7 +178,8 @@ textarea.blob-content {
 }
 
 .blob pre {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   margin: 0;
   overflow: auto;
 }

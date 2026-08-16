@@ -207,6 +207,7 @@
     var error = document.getElementById('error');
     var rawLink = document.getElementById('raw-link');
     var editBtn = document.getElementById('edit');
+    var addBtn = document.getElementById('add-blob');
     var saveBtn = document.getElementById('save-new');
     var cancelBtn = document.getElementById('cancel-edit');
     rawLink.href = '/raw/' + encodeURIComponent(id);
@@ -216,6 +217,7 @@
     function setMode(edit) {
       renderView(edit);
       editBtn.hidden = edit;
+      addBtn.hidden = !edit;
       saveBtn.hidden = !edit;
       cancelBtn.hidden = !edit;
     }
@@ -256,6 +258,10 @@
       if (!state.blobs.length) return;
       error.hidden = true;
       setMode(true);
+    });
+
+    addBtn.addEventListener('click', function () {
+      document.getElementById('paste-list').appendChild(blobEditor(null));
     });
 
     saveBtn.addEventListener('click', function () {

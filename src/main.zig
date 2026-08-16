@@ -15,8 +15,8 @@ pub fn main(init: std.process.Init) !void {
 
     const host: []const u8 = if (args.len > 1) args[1] else "0.0.0.0";
     const port: u16 = if (args.len > 2) blk: {
-        break :blk std.fmt.parseInt(u16, args[2], 10) catch 8080;
-    } else 8080;
+        break :blk std.fmt.parseInt(u16, args[2], 10) catch 960;
+    } else 960;
     const db_path: []const u8 = if (args.len > 3) args[3] else "hastezig.db";
 
     const db_path_z = try gpa.dupeZ(u8, db_path);

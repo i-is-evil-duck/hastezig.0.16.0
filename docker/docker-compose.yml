@@ -1,12 +1,28 @@
 services:
-  hastezig:
+  api:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     ports:
-      - "8080:8080"
+      - "960:960"
     volumes:
       - hastezig-data:/data
+    restart: unless-stopped
+
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "961:961"
+      - "962:962"
+    environment:
+      - MAIN_ORIGIN=http://localhost:961
+      - LIGHT_ORIGIN=http://localhost:962
+    volumes:
+      - ../frontend/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ../frontend/main:/usr/share/nginx/html/main:ro
+      - ../frontend/light:/usr/share/nginx/html/light:ro
+    depends_on:
+      - api
     restart: unless-stopped
 
 volumes:

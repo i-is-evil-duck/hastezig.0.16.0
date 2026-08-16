@@ -13,6 +13,6 @@ RUN zig build -Doptimize=ReleaseSafe -Dtarget=x86_64-linux-musl
 
 FROM scratch
 COPY --from=build /app/zig-out/bin/hastezig /hastezig
-EXPOSE 8080
+EXPOSE 960
 VOLUME ["/data"]
-ENTRYPOINT ["/hastezig", "0.0.0.0", "8080", "/data/hastezig.db"]
+ENTRYPOINT ["/hastezig", "0.0.0.0", "960", "/data/hastezig.db"]

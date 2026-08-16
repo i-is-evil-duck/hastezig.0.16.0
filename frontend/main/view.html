@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>hastezig</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header>
@@ -13,8 +13,10 @@
     <div class="toolbar">
       <a id="raw-link" class="btn" href="#">raw</a>
       <button id="edit" type="button">edit</button>
+      <button id="add-blob" type="button" hidden>+ blob</button>
       <button id="save-new" type="button" hidden>save as new paste</button>
       <button id="cancel-edit" type="button" hidden>cancel</button>
+      <a class="theme-switch" href="{{LIGHT_ORIGIN}}/">light theme</a>
     </div>
   </header>
 
@@ -23,8 +25,8 @@
     <p id="error" class="error" hidden></p>
   </main>
 
-  <script src="/static/vendor/highlight.min.js"></script>
-  <script src="/static/vendor/zig.min.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="/vendor/highlight.min.js"></script>
+  <script src="/vendor/zig.min.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>

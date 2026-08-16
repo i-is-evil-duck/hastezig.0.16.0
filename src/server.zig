@@ -3,14 +3,18 @@ const std = @import("std");
 const net = std.Io.net;
 const http = std.http;
 const db = @import("db.zig");
-const web = @import("web.zig");
 
 pub const max_paste_size: usize = 256 * 1024;
 pub const max_blobs: usize = 20;
 
-const html_content_type = "text/html; charset=utf-8";
 const json_content_type = "application/json";
 const text_content_type = "text/plain; charset=utf-8";
+
+const cors_headers = [_]http.Header{
+    .{ .name = "access-control-allow-origin", .value = "*" },
+    .{ .name = "access-control-allow-methods", .value = "GET, POST, OPTIONS" },
+    .{ .name = "access-control-allow-headers", .value = "content-type" },
+};
 
 pub const App = struct {
     gpa: std.mem.Allocator,
@@ -99,15 +103,7 @@ fn handleRequest(self: *App, request: *http.Server.Request) !void {
     const query = std.mem.indexOfScalar(u8, full_path, '?');
     const path = if (query) |q| full_path[0..q] else full_path;
 
-    if (std.mem.eql(u8, path, "/")) {
-        return respondHtml(request, web.index_html);
-    }
-
-    if (std.mem.startsWith(u8, path, "/static/")) {
-        const name = path["/static/".len..];
-        const file = web.findStatic(name) orelse return notFound(request);
-        return respondStatic(request, file);
-    }
+    if (request.head.method == .OPTIONS) return respondOptions(request);
 
     if (std.mem.eql(u8, path, "/api/paste")) {
         if (request.head.method != .POST) return methodNotAllowed(request);
@@ -124,13 +120,6 @@ fn handleRequest(self: *App, request: *http.Server.Request) !void {
         const id = path["/raw/".len..];
         if (id.len == 0) return notFound(request);
         return apiRaw(self, request, id);
-    }
-
-    // "/<id>" -> paste view page
-    if (path.len == 6 and path[0] == '/') {
-        const id = path[1..];
-        if (try self.db.exists(self.io, id)) return respondHtml(request, web.view_html);
-        return notFound(request);
     }
 
     return notFound(request);
@@ -276,28 +265,20 @@ fn apiRaw(self: *App, request: *http.Server.Request, id: []const u8) !void {
 // Responses
 // ---------------------------------------------------------------------------
 
-fn respondHtml(request: *http.Server.Request, content: []const u8) !void {
-    return request.respond(content, .{ .extra_headers = &.{
-        .{ .name = "content-type", .value = html_content_type },
-    } });
-}
-
-fn respondStatic(request: *http.Server.Request, file: *const web.StaticFile) !void {
-    return request.respond(file.data, .{ .extra_headers = &.{
-        .{ .name = "content-type", .value = file.content_type },
-    } });
+fn respondOptions(request: *http.Server.Request) !void {
+    return request.respond("", .{ .status = .no_content, .extra_headers = &cors_headers });
 }
 
 fn respondJson(request: *http.Server.Request, status: http.Status, content: []const u8) !void {
-    return request.respond(content, .{ .status = status, .extra_headers = &.{
-        .{ .name = "content-type", .value = json_content_type },
-    } });
+    return request.respond(content, .{ .status = status, .extra_headers = &(
+        [_]http.Header{.{ .name = "content-type", .value = json_content_type }} ++ cors_headers
+    ) });
 }
 
 fn respondPlain(request: *http.Server.Request, content: []const u8) !void {
-    return request.respond(content, .{ .extra_headers = &.{
-        .{ .name = "content-type", .value = text_content_type },
-    } });
+    return request.respond(content, .{ .extra_headers = &(
+        [_]http.Header{.{ .name = "content-type", .value = text_content_type }} ++ cors_headers
+    ) });
 }
 
 fn respondJsonError(
@@ -315,11 +296,11 @@ fn respondJsonError(
 }
 
 fn notFound(request: *http.Server.Request) !void {
-    return request.respond("404 not found\n", .{ .status = .not_found, .keep_alive = false });
+    return request.respond("404 not found\n", .{ .status = .not_found, .keep_alive = false, .extra_headers = &cors_headers });
 }
 
 fn methodNotAllowed(request: *http.Server.Request) !void {
-    return request.respond("405 method not allowed\n", .{ .status = .method_not_allowed });
+    return request.respond("405 method not allowed\n", .{ .status = .method_not_allowed, .extra_headers = &cors_headers });
 }
 
 // ---------------------------------------------------------------------------
