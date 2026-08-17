@@ -215,6 +215,10 @@
             100% { transform: translate(-50%, -50%) scale(0.4) rotate(360deg); opacity: 0; }
         }
 
+        @media (hover: none) and (pointer: coarse) {
+            body, a, button, .dot { cursor: auto; }
+            .ffb-cursor { display: none; }
+        }
         @media (prefers-reduced-motion: reduce) {
             .ffb-cursor { display: none; }
             body { cursor: auto; }
@@ -332,6 +336,7 @@
 
         /* ---------- cursor from furryfemboys.top ---------- */
         (function () {
+            if (matchMedia('(hover: none)').matches) return;
             const cursor = document.getElementById('ffbCursor');
             if (!cursor) return;
             const HALF = 28;
@@ -354,6 +359,7 @@
 
         /* ---------- sparkle trail from furryfemboys.top ---------- */
         (function () {
+            if (matchMedia('(hover: none)').matches) return;
             const trailChars = [
                 'nf-fa-star', 'nf-oct-star', 'nf-cod-star_empty',
                 'nf-weather-stars', 'nf-fa-heart_o', 'nf-fa-heart',
