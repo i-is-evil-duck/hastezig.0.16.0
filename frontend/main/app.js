@@ -90,6 +90,17 @@
     return blobs;
   }
 
+  function readJson(res) {
+    return res.text().then(function (text) {
+      var data = null;
+      try { data = JSON.parse(text); } catch (e) {}
+      if (!res.ok) {
+        throw new Error((data && data.error) || 'Request failed (' + res.status + ').');
+      }
+      return data;
+    });
+  }
+
   function submitPaste(blobs, error) {
     return fetch('/api/paste', {
       method: 'POST',
@@ -97,8 +108,8 @@
       body: JSON.stringify({ blobs: blobs })
     })
       .then(function (res) {
-        return res.json().then(function (data) {
-          if (!res.ok) throw new Error(data.error || 'Failed to create paste.');
+        return readJson(res).then(function (data) {
+          if (!data || !data.id) throw new Error('Failed to create paste.');
           return data;
         });
       })
@@ -181,6 +192,11 @@
         setTimeout(function () {
           copy.textContent = 'copy';
         }, 1500);
+      }).catch(function () {
+        copy.textContent = 'copy failed';
+        setTimeout(function () {
+          copy.textContent = 'copy';
+        }, 1500);
       });
     });
 
@@ -238,8 +254,8 @@
 
     fetch('/api/paste/' + encodeURIComponent(id))
       .then(function (res) {
-        return res.json().then(function (data) {
-          if (!res.ok) throw new Error(data.error || 'Paste not found.');
+        return readJson(res).then(function (data) {
+          if (!data) throw new Error('Paste not found.');
           return data;
         });
       })

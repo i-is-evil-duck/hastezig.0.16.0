@@ -19,12 +19,19 @@ pub fn main(init: std.process.Init) !void {
     } else 960;
     const db_path: []const u8 = if (args.len > 3) args[3] else "hastezig.db";
 
+    const environ = init.environ_map;
+    const admin_user = environ.get("ADMIN_USER") orelse "admin";
+    const admin_pass = environ.get("ADMIN_PASS") orelse "admin";
+
+    if (std.mem.eql(u8, admin_user, "admin") and std.mem.eql(u8, admin_pass, "admin"))
+        std.log.warn("console using default credentials (ADMIN_USER=admin ADMIN_PASS=admin)", .{});
+
     const db_path_z = try gpa.dupeZ(u8, db_path);
     defer gpa.free(db_path_z);
 
     const address = try net.IpAddress.parse(host, port);
 
-    var app = try server.App.init(gpa, io, db_path_z, address);
+    var app = try server.App.init(gpa, io, db_path_z, address, admin_user, admin_pass);
     defer app.deinit();
 
     try app.listen();

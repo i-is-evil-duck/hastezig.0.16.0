@@ -129,15 +129,17 @@ pub const Db = struct {
         return c.sqlite3_column_int(stmt.?, 0) != 0;
     }
 
-    /// Insert a paste. Caller guarantees `id` and all `blobs` fields stay
-    /// alive until this returns.
-    pub fn insert(
+    /// Try to insert a paste, returning `false` if `id` already exists. The
+    /// existence check and insert happen atomically within one transaction, so
+    /// callers can safely retry with a fresh id on collision. Caller guarantees
+    /// `id` and all `blobs` fields stay alive until this returns.
+    pub fn tryInsert(
         self: *Db,
         io: std.Io,
         id: []const u8,
         blobs: []const Blob,
         created_at: i64,
-    ) !void {
+    ) !bool {
         self.mutex.lockUncancelable(io);
         defer self.mutex.unlock(io);
 
@@ -146,7 +148,7 @@ pub const Db = struct {
 
         var pstmt: ?*c.sqlite3_stmt = null;
         defer finalize(pstmt);
-        const psql = "INSERT INTO pastes (id, created_at) VALUES (?, ?)";
+        const psql = "INSERT OR IGNORE INTO pastes (id, created_at) VALUES (?, ?)";
         if (c.sqlite3_prepare_v2(self.conn, psql.ptr, psql.len, &pstmt, null) != c.SQLITE_OK)
             return error.SqliteQueryFailed;
         if (c.sqlite3_bind_text(pstmt.?, 1, id.ptr, @intCast(id.len), null) != c.SQLITE_OK)
@@ -154,6 +156,12 @@ pub const Db = struct {
         if (c.sqlite3_bind_int64(pstmt.?, 2, created_at) != c.SQLITE_OK)
             return error.SqliteQueryFailed;
         if (c.sqlite3_step(pstmt.?) != c.SQLITE_DONE) return error.SqliteStepFailed;
+
+        if (c.sqlite3_changes(self.conn) == 0) {
+            // The id already exists; roll back and let the caller retry.
+            self.exec("ROLLBACK;") catch return error.SqliteQueryFailed;
+            return false;
+        }
 
         var bstmt: ?*c.sqlite3_stmt = null;
         defer finalize(bstmt);
@@ -175,6 +183,7 @@ pub const Db = struct {
         }
 
         self.exec("COMMIT;") catch return error.SqliteQueryFailed;
+        return true;
     }
 
     pub fn get(self: *Db, io: std.Io, id: []const u8) !?Paste {
@@ -251,25 +260,165 @@ pub const Db = struct {
         };
     }
 
-    pub fn exists(self: *Db, io: std.Io, id: []const u8) !bool {
+    pub const PasteInfo = struct {
+        id: []const u8,
+        created_at: i64,
+        lang: []const u8,
+        blobs: usize,
+        size: usize,
+        preview: []const u8,
+        gpa: std.mem.Allocator,
+
+        pub fn deinit(self: *PasteInfo) void {
+            self.gpa.free(self.id);
+            self.gpa.free(self.lang);
+            self.gpa.free(self.preview);
+        }
+    };
+
+    pub fn listAll(self: *Db, io: std.Io) ![]PasteInfo {
         self.mutex.lockUncancelable(io);
         defer self.mutex.unlock(io);
 
+        var infos: std.ArrayList(PasteInfo) = .empty;
+        errdefer {
+            for (infos.items) |*p| p.deinit();
+            infos.deinit(self.gpa);
+        }
+
         var stmt: ?*c.sqlite3_stmt = null;
         defer finalize(stmt);
-
-        const sql = "SELECT 1 FROM pastes WHERE id = ?";
-        const rc = c.sqlite3_prepare_v2(self.conn, sql.ptr, sql.len, &stmt, null);
-        if (rc != c.SQLITE_OK) return error.SqliteQueryFailed;
-
-        if (c.sqlite3_bind_text(stmt.?, 1, id.ptr, @intCast(id.len), null) != c.SQLITE_OK)
+        const sql =
+            \\SELECT p.id, p.created_at,
+            \\  (SELECT COUNT(*) FROM blobs b WHERE b.paste_id = p.id),
+            \\  (SELECT COALESCE(SUM(LENGTH(b.content)),0) FROM blobs b WHERE b.paste_id = p.id),
+            \\  (SELECT b.lang FROM blobs b WHERE b.paste_id = p.id ORDER BY b.position ASC LIMIT 1),
+            \\  (SELECT b.content FROM blobs b WHERE b.paste_id = p.id ORDER BY b.position ASC LIMIT 1)
+            \\FROM pastes p ORDER BY p.created_at DESC LIMIT 500
+        ;
+        if (c.sqlite3_prepare_v2(self.conn, sql.ptr, sql.len, &stmt, null) != c.SQLITE_OK)
             return error.SqliteQueryFailed;
 
-        return switch (c.sqlite3_step(stmt.?)) {
-            c.SQLITE_ROW => true,
-            c.SQLITE_DONE => false,
-            else => error.SqliteStepFailed,
-        };
+        while (true) {
+            switch (c.sqlite3_step(stmt.?)) {
+                c.SQLITE_ROW => {},
+                c.SQLITE_DONE => break,
+                else => return error.SqliteStepFailed,
+            }
+            const id_raw = c.sqlite3_column_text(stmt.?, 0) orelse return error.SqliteStepFailed;
+            const id_len = c.sqlite3_column_bytes(stmt.?, 0);
+            const created_at = c.sqlite3_column_int64(stmt.?, 1);
+            const blob_count: usize = @intCast(c.sqlite3_column_int(stmt.?, 2));
+            const size: usize = @intCast(c.sqlite3_column_int(stmt.?, 3));
+
+            const lang_raw = c.sqlite3_column_text(stmt.?, 4);
+            const lang_len: usize = if (lang_raw != null) @intCast(c.sqlite3_column_bytes(stmt.?, 4)) else 0;
+
+            const content_raw = c.sqlite3_column_text(stmt.?, 5);
+            const content_len: usize = if (content_raw != null) @intCast(c.sqlite3_column_bytes(stmt.?, 5)) else 0;
+
+            const id = self.gpa.dupe(u8, id_raw[0..@intCast(id_len)]) catch |e| return e;
+            errdefer self.gpa.free(id);
+
+            const lang = if (lang_raw) |r| self.gpa.dupe(u8, r[0..lang_len]) catch |e| {
+                self.gpa.free(id);
+                return e;
+            } else self.gpa.dupe(u8, "plaintext") catch |e| {
+                self.gpa.free(id);
+                return e;
+            };
+            errdefer self.gpa.free(lang);
+
+            const preview_len = @min(content_len, 120);
+            const preview = if (content_raw) |r| self.gpa.dupe(u8, r[0..preview_len]) catch |e| {
+                self.gpa.free(id);
+                self.gpa.free(lang);
+                return e;
+            } else &[_]u8{};
+            errdefer self.gpa.free(preview);
+
+            infos.append(self.gpa, .{
+                .id = id,
+                .created_at = created_at,
+                .lang = lang,
+                .blobs = blob_count,
+                .size = size,
+                .preview = preview,
+                .gpa = self.gpa,
+            }) catch |e| {
+                self.gpa.free(id);
+                self.gpa.free(lang);
+                self.gpa.free(preview);
+                return e;
+            };
+        }
+
+        return infos.toOwnedSlice(self.gpa);
+    }
+
+    pub fn deleteByIds(self: *Db, io: std.Io, ids: []const []const u8) !usize {
+        self.mutex.lockUncancelable(io);
+        defer self.mutex.unlock(io);
+
+        self.exec("BEGIN;") catch return error.SqliteQueryFailed;
+        errdefer self.exec("ROLLBACK;") catch {};
+
+        var total_deleted: usize = 0;
+
+        for (ids) |id| {
+            var bstmt: ?*c.sqlite3_stmt = null;
+            defer finalize(bstmt);
+            if (c.sqlite3_prepare_v2(self.conn, "DELETE FROM blobs WHERE paste_id = ?".ptr, "DELETE FROM blobs WHERE paste_id = ?".len, &bstmt, null) != c.SQLITE_OK)
+                return error.SqliteQueryFailed;
+            if (c.sqlite3_bind_text(bstmt.?, 1, id.ptr, @intCast(id.len), null) != c.SQLITE_OK)
+                return error.SqliteQueryFailed;
+            if (c.sqlite3_step(bstmt.?) != c.SQLITE_DONE) return error.SqliteStepFailed;
+
+            var pstmt: ?*c.sqlite3_stmt = null;
+            defer finalize(pstmt);
+            if (c.sqlite3_prepare_v2(self.conn, "DELETE FROM pastes WHERE id = ?".ptr, "DELETE FROM pastes WHERE id = ?".len, &pstmt, null) != c.SQLITE_OK)
+                return error.SqliteQueryFailed;
+            if (c.sqlite3_bind_text(pstmt.?, 1, id.ptr, @intCast(id.len), null) != c.SQLITE_OK)
+                return error.SqliteQueryFailed;
+            if (c.sqlite3_step(pstmt.?) != c.SQLITE_DONE) return error.SqliteStepFailed;
+
+            total_deleted += @intCast(c.sqlite3_changes(self.conn));
+        }
+
+        self.exec("COMMIT;") catch return error.SqliteQueryFailed;
+        return total_deleted;
+    }
+
+    pub fn deleteOlderThan(self: *Db, io: std.Io, ts: i64) !usize {
+        self.mutex.lockUncancelable(io);
+        defer self.mutex.unlock(io);
+
+        self.exec("BEGIN;") catch return error.SqliteQueryFailed;
+        errdefer self.exec("ROLLBACK;") catch {};
+
+        {
+            var stmt: ?*c.sqlite3_stmt = null;
+            defer finalize(stmt);
+            if (c.sqlite3_prepare_v2(self.conn, "DELETE FROM blobs WHERE paste_id IN (SELECT id FROM pastes WHERE created_at < ?)".ptr, "DELETE FROM blobs WHERE paste_id IN (SELECT id FROM pastes WHERE created_at < ?)".len, &stmt, null) != c.SQLITE_OK)
+                return error.SqliteQueryFailed;
+            if (c.sqlite3_bind_int64(stmt.?, 1, ts) != c.SQLITE_OK)
+                return error.SqliteQueryFailed;
+            if (c.sqlite3_step(stmt.?) != c.SQLITE_DONE) return error.SqliteStepFailed;
+        }
+
+        {
+            var stmt: ?*c.sqlite3_stmt = null;
+            defer finalize(stmt);
+            if (c.sqlite3_prepare_v2(self.conn, "DELETE FROM pastes WHERE created_at < ?".ptr, "DELETE FROM pastes WHERE created_at < ?".len, &stmt, null) != c.SQLITE_OK)
+                return error.SqliteQueryFailed;
+            if (c.sqlite3_bind_int64(stmt.?, 1, ts) != c.SQLITE_OK)
+                return error.SqliteQueryFailed;
+            if (c.sqlite3_step(stmt.?) != c.SQLITE_DONE) return error.SqliteStepFailed;
+        }
+
+        const total_deleted: usize = @intCast(c.sqlite3_changes(self.conn));
+        self.exec("COMMIT;") catch return error.SqliteQueryFailed;
+        return total_deleted;
     }
 };
 
