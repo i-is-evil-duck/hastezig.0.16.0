@@ -32,8 +32,12 @@
             flex: 1;
             display: flex;
             flex-direction: column;
-            max-width: 100%;
             width: 100%;
+            padding: 0 5vw;
+            overflow: hidden;
+        }
+        @media (max-width: 850px) {
+            .container { padding: 0; }
         }
         .editor-container {
             background: #ffffff;
@@ -145,15 +149,17 @@
             white-space: nowrap;
         }
         .result {
-            margin-top: 16px;
-            padding: 16px;
-            background: #ffffff;
-            border: 2px solid #ff69b4;
-            border-radius: 12px;
             display: none;
+            font-size: 0.75rem;
+            color: #ff69b4;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 40ch;
         }
         .result.show {
-            display: block;
+            display: inline;
+            margin: 0 6px;
         }
         .result a {
             color: #ff69b4;
@@ -162,9 +168,8 @@
         .result a:hover {
             text-decoration: underline;
         }
-        .error {
+        .result.error {
             color: #ff4757;
-            margin-top: 10px;
         }
         .paste-view {
             background: #ffffff;
@@ -242,11 +247,10 @@
                 <button class="bar-btn" onclick="submitPaste()">Create</button>
                 <a class="bar-btn secondary" href="/">New</a>
                 <button class="bar-btn secondary" onclick="viewRaw()">View Raw</button>
+                <span class="result" id="result"></span>
                 <span class="char-count" id="charCount">0 characters</span>
             </div>
         </div>
-
-        <div class="result" id="result"></div>
         <div class="paste-view" id="pasteView"></div>
     </div>
 
@@ -292,10 +296,7 @@
 
                 const data = await response.json().catch(() => null);
                 if (response.ok && data && data.id) {
-                    const url = window.location.origin + '/p/' + data.id;
-                    showResult('Paste created! <a href="' + url + '">' + url + '</a>');
-                    textarea.value = '';
-                    charCount.textContent = '0 characters';
+                    window.location.href = '/p/' + data.id;
                 } else {
                     showResult((data && data.error) || 'Failed to create paste. Please try again.', true);
                 }
