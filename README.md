@@ -1,5 +1,7 @@
-# hastezig
+# HasteZig  <br />  <img alt="Stargazers" src="https://img.shields.io/github/stars/i-is-evil-duck/hastezig.0.16.0?style=for-the-badge&logo=starship&color=C9CBFF&logoColor=D9E0EE&labelColor=302D41">
 
+
+## HasteZig
 A tiny pastebin written in Zig. Client-side syntax highlighting, SQLite storage,
 no expiry, no accounts.
 
@@ -94,3 +96,16 @@ curl http://localhost:960/raw/aBcDe
 - `frontend/light/` – light theme (self-contained light.html)
 - `frontend/nginx/` – nginx config template (ports 961/962, `/api` + `/raw` proxy)
 - `docker/` – Dockerfile (API) and docker-compose.yml
+
+## Downloads
+
+Download the pre-built executables from the [releases](https://github.com/i-is-evil-duck/hastezig.0.16.0/releases) page.
+
+| Platform | File |
+|----------|------|
+| Linux | `hastezig` |
+| Docker | `docker compose -f docker/docker-compose.yml up --build` |
+
+## Views
+
+<img src="https://count.getloli.com/get/@Hastezig?theme=rule34" />
